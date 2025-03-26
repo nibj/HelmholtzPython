@@ -7,66 +7,7 @@ from geometries_penetrable import circle
 import numpy as np
 import scipy.special as scs
 
-def farf2d(u,mesh,farp,kappa,porder):
-    nphi=farp["n"]
-    cphi=farp["cent"]
-    appphi=farp["app"]
-    nv=specialcf.normal(mesh.dim)
-    phi=np.zeros(nphi)
-    uinf=np.zeros(nphi,dtype=complex)
-    fesa=H1(mesh, order=porder, complex=True, definedon=mesh.Materials("air"))
-    #print(Integrate(CoefficientFunction(nv[0]*(x-x0[0])+nv[1]*(y-x0[1])),mesh,order=porder+1,definedon=mesh.Boundaries("scatterer")))
-    for jp in range(0,nphi):
-        #phi[jp]=(cphi-appphi/2)+appphi*jp/(nphi-1)
-        phi[jp]=2*np.pi*jp/(nphi-1)  ## Special for testing
-        xhat=CoefficientFunction((np.cos(phi[jp]),np.sin(phi[jp])))
-        Eout = exp(-1J*kappa*(x*xhat[0]+y*xhat[1]))
-        func1=CoefficientFunction(-1j*kappa*(xhat*nv)*Eout * u)
-        uinf1=Integrate(tuple(func1),mesh,order=porder+1,definedon=
-                            mesh.Boundaries("scatterer"))
-        vv=GridFunction(fesa)
-        vv.vec[:]=0
-        vv.Set(Eout,BND,definedon=mesh.Boundaries("scatterer"))
-        fvv=CoefficientFunction(grad(vv)*grad(u)-kappa*kappa*vv*u)
-        uinf2=Integrate(tuple(fvv),mesh,order=porder+1,definedon=mesh.Materials("air"))
-        uinf[jp]=exp(1J*np.pi/4)/np.sqrt(8*np.pi*kappa)*(uinf1+uinf2)
-    return(uinf,phi)
-
-def helmsol(mesh,porder,ncoef,kappa,incp,farp):
-    fes = H1(mesh, order=porder, complex=True)
-    u = fes.TrialFunction()
-    v = fes.TestFunction()
-    a = BilinearForm(fes)
-    a += SymbolicBFI(grad(u)*grad(v) - kappa**2*ncoef*u*v)
-    a += SymbolicBFI(-1j*kappa*u*v,definedon=mesh.Boundaries("outerbnd"))
-    print('Number of DoFs: ',fes.ndof)
-    gfu = GridFunction(fes)
-    Draw(gfu,mesh,'us')
-    with TaskManager():
-        a.Assemble()
-        Ainv=a.mat.Inverse()
-    
-    uinf=np.zeros((farp["n"],incp["n"]),dtype=complex)
-    theta=np.zeros(incp["n"]);
-    center=incp["cent"]
-    app=incp["app"]
-    for ip in range(0,incp["n"]):
-        if ip%10==0:
-            print("Done ip = ", ip,' of ',incp["n"])
-        if incp["n"]==1:
-            theta[0]=0.0
-        else:
-            theta[ip]=(center-app/2)+app*ip/(incp["n"]-1)
-        d=[np.cos(theta[ip]),np.sin(theta[ip])]
-        with TaskManager():
-            b = LinearForm(fes)
-            ui=exp(1J*kappa*(d[0]*x+d[1]*y))
-            b += SymbolicLFI(kappa*kappa*(ncoef-1)*ui * v)
-            b.Assemble()
-            gfu.vec.data =  Ainv * b.vec
-            Redraw()
-        uinf[:,ip],phi=farf2d(gfu,mesh,farp,kappa,porder)
-    return(uinf,theta,phi)
+from helmsol import *
 
 def solve_helmholtz(kappa,ncoef,phi,R,N,npoints,x0):
     #
@@ -176,7 +117,7 @@ if __name__ == "__main__":
                                 for mat in mesh.GetMaterials()])
     #Draw(scatter,mesh,'scatterer') # use to check the gtometry is OK
    
-    uinf,theta,phi=helmsol(mesh,porder,ncoef,kappa,inc_p,far_p) # FEM
+    uinf,theta,phi=helmsol_penetrable(mesh,porder,ncoef,kappa,inc_p,far_p) # FEM
     phi=0
     N=100
     npoints=far_p["n"]

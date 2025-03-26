@@ -8,75 +8,9 @@ import matplotlib.pyplot as plt
 import scipy.io as sio
 ngsglobals.msg_level = 0
 
-def farf2d(u,mesh,farp,omega,porder):
-    nphi=farp["n"]
-    cphi=farp["cent"]
-    appphi=farp["app"]
-    if nphi==1:
-        phi=np.zeros(1)
-        phi[0]=0.0
-    else:
-        phi=np.linspace(cphi-appphi/2.,cphi+appphi/2,nphi)
-    nv=specialcf.normal(mesh.dim)
-    uinf=np.zeros(nphi,dtype=complex)
-    fesa=H1(mesh, order=porder, complex=True, definedon=mesh.Materials("air"))
-    for jp in range(0,nphi):
-        xhat=(np.cos(phi[jp]),np.sin(phi[jp]))
-        Eout = exp(-1J*omega*(x*xhat[0]+y*xhat[1]))
-        func1=CoefficientFunction(-1j*omega*(CoefficientFunction(xhat)*nv)*Eout * u)
-        uinf1=Integrate(func1,mesh,order=porder+1,definedon=
-                            mesh.Boundaries("dirichlet"))
-        vv=GridFunction(fesa)
-        vv.vec[:]=0
-        vv.Set(Eout,BND,definedon=mesh.Boundaries("dirichlet"))
-        fvv=CoefficientFunction(grad(vv)*grad(u)-omega*omega*vv*u)
-        uinf2=Integrate(fvv,mesh,order=porder+1,definedon=mesh.Materials("air"))
-        uinf[jp]=exp(1J*np.pi/4)/np.sqrt(8*np.pi*omega)*(uinf1+uinf2)
-    return(uinf,phi)
+from helmsol import farf2d_dirichlet,helmsol_dirichlet
 
 
-
-def helmsol(mesh,porder,omega,incp,farp):
-    fes = H1(mesh, order=porder, complex=True, dirichlet="dirichlet")
-    print('Using ',fes.ndof,' DoFs')
-    u = fes.TrialFunction()
-    v = fes.TestFunction()
-    a = BilinearForm(fes)
-    a += grad(u)*grad(v)*dx - omega**2*u*v*dx
-    a += -1j*omega*u*v*ds("outerbnd")
-    
-    gfu = GridFunction(fes)
-    with TaskManager():
-        a.Assemble()
-        Ainv=a.mat.Inverse(fes.FreeDofs())
-    
-    uinf=np.zeros((farp["n"],incp["n"]),dtype=complex)
-    center=incp["cent"]
-    app=incp["app"]
-    if incp["n"]==1:
-        theta=np.zeros(1)
-        theta[0]=0.0
-    else:
-        theta=np.linspace(center-app/2,center+app/2,incp["n"])
-    for ip in range(0,incp["n"]):
-        print('.',end='',flush=True)
-        d=[np.cos(theta[ip]),np.sin(theta[ip])]
-        ui=exp(1J*omega*(d[0]*x+d[1]*y))
-        gfu = GridFunction(fes)
-        gfu.vec[:]=0
-        gfu.Set(-ui, definedon=mesh.Boundaries("dirichlet"))
-        with TaskManager():
-            b = LinearForm(fes)
-            b.Assemble()
-            res = b.vec.CreateVector()
-            res.data = - a.mat * gfu.vec
-            gfu.vec.data +=  Ainv * res
-        if ip%10==0:
-            Draw(gfu,mesh,'us')
-            Redraw()
-        uinf[:,ip],phi=farf2d(gfu,mesh,farp,omega,porder)
-    print(' ')
-    return(uinf,theta,phi)
 
 if __name__ == "__main__":
     omega=6  # Wavenumber.  Wavelength of the radiation is 2*pi/omega
@@ -130,7 +64,7 @@ if __name__ == "__main__":
              
         mesh.SetPML(pml.Radial(rad=pml_rad,alpha=pml_alpha,origin=(0,0)),
                         "pmlregion")
-        uinf,theta,phi=helmsol(mesh,porder,omega,inc_p,far_p)
+        uinf,theta,phi=helmsol_dirichlet(mesh,porder,omega,inc_p,far_p)
         if ngeo==0:
             print('saving Two_square')
             np.savez('farff_Two_square.npz',omega,uinf,theta,phi)
