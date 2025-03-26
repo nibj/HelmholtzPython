@@ -1,4 +1,4 @@
-# HelmholtzPythonelm
+# HelmholtzPython
 ## Netgen code for 2D Helmholtz equation
 Note that this code is supplied without any guarantees.  You cannot assume it is correct, reliable or fit for purpose.  You
 are responsible!
